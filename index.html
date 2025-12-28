@@ -226,8 +226,14 @@
 
   <div class="main-container">
     <div class="header">
-      <h1>🐍 Python : Exercices Interactifs</h1>
-      <span class="progress-badge" id="progressText">Chargement...</span>
+      <h1>🐍 Python : Exercices & Suivi</h1>
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <span class="progress-badge" id="progressText">Chargement...</span>
+        <button id="authBtn" onclick="toggleAuth()"
+          style="background:white; color:#3a7bd5; border:none; font-size:0.9rem; padding: 5px 15px;">
+          Connexion Google
+        </button>
+      </div>
     </div>
 
     <div class="content">
@@ -261,10 +267,111 @@
     </div>
   </div>
 
-  <script>
-    // ==========================================
-    // DONNÉES DES EXERCICES
-    // ==========================================
+  <script type="module">
+    // ----------------------------------------------------
+    // 1. CONFIGURATION FIREBASE (REMPLACE CECI !)
+    // ----------------------------------------------------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // COLLE TES CLÉS ICI (Celles de l'étape 4)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBGzMQwqbE1yPgoMfxvhgIeX7Qo0wBVJc4",
+      authDomain: "learnpython-1d8d0.firebaseapp.com",
+      projectId: "learnpython-1d8d0",
+      storageBucket: "learnpython-1d8d0.firebasestorage.app",
+      messagingSenderId: "975177947496",
+      appId: "1:975177947496:web:30410a3f24860816bc5edd"
+
+    };
+
+    // Initialisation
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    let currentUser = null;
+    let userProgress = []; // Liste des ID d'exos réussis (ex: [0, 2, 5])
+
+    // ----------------------------------------------------
+    // 2. GESTION CONNEXION
+    // ----------------------------------------------------
+
+    // Fonction globale pour le bouton HTML
+    window.toggleAuth = async () => {
+      if (currentUser) {
+        await signOut(auth);
+      } else {
+        try {
+          await signInWithPopup(auth, provider);
+        } catch (error) {
+          console.error("Erreur auth:", error);
+          alert("Erreur de connexion : " + error.message);
+        }
+      }
+    };
+
+    // Surveiller l'état de connexion
+    onAuthStateChanged(auth, async (user) => {
+      const btn = document.getElementById("authBtn");
+      if (user) {
+        currentUser = user;
+        btn.innerText = "Déconnexion (" + user.displayName.split(" ")[0] + ")";
+        // Charger la progression depuis la base de données
+        await loadProgress();
+      } else {
+        currentUser = null;
+        userProgress = [];
+        btn.innerText = "Connexion Google";
+      }
+      updateUI(); // Mettre à jour l'affichage (cadenas, checkmarks...)
+    });
+
+    async function loadProgress() {
+      if (!currentUser) return;
+      const userRef = doc(db, "users", currentUser.uid);
+      try {
+        const docSnap = await getDoc(userRef);
+        if (docSnap.exists()) {
+          userProgress = docSnap.data().completed || [];
+        } else {
+          // Créer le profil s'il n'existe pas
+          await setDoc(userRef, { completed: [], email: currentUser.email });
+        }
+        updateUI();
+      } catch (e) {
+        console.error("Erreur chargement:", e);
+      }
+    }
+
+    async function saveSuccess(exIndex) {
+      if (!currentUser) return; // Pas de sauvegarde si pas connecté
+
+      // Si pas déjà validé
+      if (!userProgress.includes(exIndex)) {
+        userProgress.push(exIndex);
+
+        // Envoi à Firebase
+        const userRef = doc(db, "users", currentUser.uid);
+        try {
+          await updateDoc(userRef, {
+            completed: arrayUnion(exIndex)
+          });
+          console.log("Sauvegarde réussie !");
+          updateUI();
+        } catch (e) {
+          console.error("Erreur sauvegarde:", e);
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // 3. LOGIQUE DU SITE (Exercices)
+    // ----------------------------------------------------
+
+    // --- ICI : Colle ta liste d'exercices (const exercices = [...]) ---
     const exercices = [
       {
         titre: "Multiples de 3",
@@ -281,7 +388,7 @@
       {
         titre: "Table de multiplication",
         consigne: "Écrire une fonction <code>table_multiplication(n)</code> qui affiche la table de 1 à 10. Format attendu: '5x1=5'.",
-        code: "def table_multiplication(n):\n    for i in range(1, 11):\n        # Utilisez print()\n        pass\n\n# Test rapide:\ntable_multiplication(5)",
+        code: "def table_multiplication(n):\n    for i in range(1, 11):\n        # Utilisez print()\n        pass",
         validation: { type: "output_includes", values: ["5x1=5", "5x2=10", "5x10=50"] }
       },
       {
@@ -293,7 +400,7 @@
       {
         titre: "PGCD",
         consigne: "Écrire une fonction <code>pgcd(a, b)</code> qui retourne le Plus Grand Commun Diviseur.",
-        code: "def pgcd(a, b):\n    # Votre code ici\n    return 1",
+        code: "import math\ndef pgcd(a, b):\n    # Vous pouvez utiliser l'algorithme d'Euclide\n    return 1",
         validation: { type: "function", tests: ["assert pgcd(48, 18) == 6", "assert pgcd(10, 5) == 5", "assert pgcd(17, 3) == 1"] }
       },
       {
@@ -305,7 +412,7 @@
       {
         titre: "Nombres premiers (1-100)",
         consigne: "Affichez tous les nombres premiers entre 1 et 100, un par ligne.",
-        code: "# Vous pouvez réutiliser votre fonction est_premier si vous voulez\nfor i in range(1, 101):\n    pass",
+        code: "# Vous pouvez réutiliser votre fonction est_premier si vous la copiez ici\nfor i in range(1, 101):\n    pass",
         validation: { type: "output_list", values: ["2", "3", "5", "7", "11", "13", "17", "19", "23", "29", "31", "37", "41", "43", "47", "53", "59", "61", "67", "71", "73", "79", "83", "89", "97"] }
       },
       {
@@ -316,7 +423,7 @@
       },
       {
         titre: "Compter les mots",
-        consigne: "Écrire une fonction <code>compter_mots(phrase)</code> qui retourne le nombre de mots.",
+        consigne: "Écrire une fonction <code>compter_mots(phrase)</code> qui retourne le nombre de mots (séparés par des espaces).",
         code: "def compter_mots(phrase):\n    # Indice: utilisez split()\n    return 0",
         validation: { type: "function", tests: ["assert compter_mots('Bonjour le monde') == 3", "assert compter_mots('Un') == 1"] }
       },
@@ -327,10 +434,10 @@
         validation: { type: "function", tests: ["assert est_palindrome('radar') == True", "assert est_palindrome('python') == False", "assert est_palindrome('kayak') == True"] }
       },
       {
-        titre: "Lancer de dé",
-        consigne: "Affichez un nombre aléatoire entre 1 et 6.",
-        code: "import random\n# Votre code",
-        validation: { type: "manual", hint: "Vérifiez que le nombre affiché est bien entre 1 et 6." }
+        titre: "Lancer de dé (Simulation)",
+        consigne: "Écrire une fonction <code>lancer_de()</code> qui retourne un entier aléatoire entre 1 et 6.",
+        code: "import random\ndef lancer_de():\n    return 0",
+        validation: { type: "function", tests: ["assert 1 <= lancer_de() <= 6", "assert isinstance(lancer_de(), int)"] }
       },
       {
         titre: "Puissance",
@@ -340,8 +447,8 @@
       },
       {
         titre: "Suite de Syracuse",
-        consigne: "Affichez les termes de la suite de Syracuse pour N=6 jusqu'à atteindre 1.",
-        code: "n = 6\nwhile n != 1:\n    print(n)\n    # Si n pair -> n/2, sinon -> 3n+1\n    break # Retirez le break pour éviter la boucle infinie une fois codé",
+        consigne: "Affichez les termes de la suite de Syracuse pour N=6 jusqu'à atteindre 1. (Rappel: pair->n/2, impair->3n+1)",
+        code: "n = 6\nwhile n != 1:\n    print(int(n))\n    # Logique ici\n    break # Sécurité boucle infinie",
         validation: { type: "output_includes", values: ["6", "3", "10", "5", "16", "8", "4", "2"] }
       },
       {
@@ -352,13 +459,13 @@
       },
       {
         titre: "Nombre d'Armstrong",
-        consigne: "Un nombre est Armstrong si la somme des cubes de ses chiffres est égale au nombre lui-même (ex: 153 = 1^3 + 5^3 + 3^3). Créez la fonction <code>est_armstrong(n)</code>.",
+        consigne: "Un nombre est Armstrong si la somme des cubes de ses chiffres est égale au nombre. Fonction <code>est_armstrong(n)</code>.",
         code: "def est_armstrong(n):\n    return False",
         validation: { type: "function", tests: ["assert est_armstrong(153) == True", "assert est_armstrong(10) == False", "assert est_armstrong(370) == True"] }
       },
       {
         titre: "Nombre parfait",
-        consigne: "Un nombre est parfait s'il est égal à la somme de ses diviseurs propres (ex: 6 = 1+2+3). Fonction <code>est_parfait(n)</code>.",
+        consigne: "Un nombre est parfait s'il est égal à la somme de ses diviseurs propres. Fonction <code>est_parfait(n)</code>.",
         code: "def est_parfait(n):\n    somme_div = 0\n    # Calculez la somme des diviseurs < n\n    return somme_div == n",
         validation: { type: "function", tests: ["assert est_parfait(6) == True", "assert est_parfait(28) == True", "assert est_parfait(12) == False"] }
       },
@@ -388,27 +495,27 @@
       },
       {
         titre: "Jours dans un mois",
-        consigne: "Fonction <code>nb_jours(mois, annee)</code>. Attention aux années bissextiles pour février (2020 est bissextile).",
+        consigne: "Fonction <code>nb_jours(mois, annee)</code>. Attention aux années bissextiles pour février.",
         code: "def nb_jours(mois, annee):\n    if mois in [1, 3, 5, 7, 8, 10, 12]: return 31\n    # Complétez la logique\n    return 30",
         validation: { type: "function", tests: ["assert nb_jours(1, 2021) == 31", "assert nb_jours(2, 2020) == 29", "assert nb_jours(2, 2021) == 28", "assert nb_jours(4, 2021) == 30"] }
       },
       {
-        titre: "Lancer de dés (Simulation)",
-        consigne: "Fonction <code>simuler_lancer(n_des)</code> qui retourne la SOMME de n dés lancés.",
-        code: "import random\ndef simuler_lancer(n_des):\n    somme = 0\n    # Boucle de lancer\n    return somme",
-        validation: { type: "manual", hint: "Testez votre fonction plusieurs fois : simuler_lancer(2) doit donner entre 2 et 12." }
+        titre: "Logique devinette",
+        consigne: "Fonction <code>verif_devinette(secret, essai)</code>. Retourne 'Trop grand', 'Trop petit' ou 'Gagné'.",
+        code: "def verif_devinette(secret, essai):\n    # Comparez secret et essai\n    return \"\"",
+        validation: { type: "function", tests: ["assert verif_devinette(10, 5) == 'Trop petit'", "assert verif_devinette(10, 15) == 'Trop grand'", "assert verif_devinette(10, 10) == 'Gagné'"] }
+      },
+      {
+        titre: "Pierre-Feuille-Ciseaux",
+        consigne: "Fonction <code>gagnant_pfc(j1, j2)</code> (valeurs: 'P', 'F', 'C'). Retourne 'J1', 'J2' ou 'Nul'.",
+        code: "def gagnant_pfc(j1, j2):\n    if j1 == j2: return 'Nul'\n    # Logique pour P, F, C\n    return 'J1'",
+        validation: { type: "function", tests: ["assert gagnant_pfc('P', 'C') == 'J1'", "assert gagnant_pfc('P', 'F') == 'J2'", "assert gagnant_pfc('F', 'F') == 'Nul'"] }
       },
       {
         titre: "Fréquence des faces",
         consigne: "Simulez 100 lancers et affichez la liste des fréquences pour les faces 1 à 6.",
         code: "import random\nfreq = [0] * 6\n# Simulez 100 lancers et remplissez freq\nprint(freq)",
         validation: { type: "manual", hint: "La sortie doit être une liste de 6 nombres dont la somme fait 100." }
-      },
-      {
-        titre: "Jeu : Devinette (Manuel)",
-        consigne: "Ceci est un exercice libre. Créez un script qui génère un nombre aléatoire et demande à l'utilisateur de deviner (via input).",
-        code: "import random\nsecret = random.randint(1, 100)\nprint('Jeu : devinez le nombre !')\n# input() fonctionne, mais attention aux pop-ups !",
-        validation: { type: "manual", hint: "Cet exercice ne peut pas être validé automatiquement. Vérifiez vous-même !" }
       }
     ];
 
@@ -440,123 +547,167 @@
       }
     }
     initPyodide();
+    // code verifié au dessus
+    // --- 1. FONCTIONS GLOBALES (Accessibles depuis le HTML) ---
 
-    function loadExercise(index) {
+    window.loadExercise = function (index) {
+      // Vérification des bornes
+      if (index < 0 || index >= exercices.length) return;
+
       currentIdx = index;
       const ex = exercices[index];
 
+      // Mise à jour Titre et Consigne
       document.getElementById("exTitle").innerText = `${index + 1}. ${ex.titre}`;
       document.getElementById("exInstruction").innerHTML = ex.consigne;
-      document.getElementById("progressText").innerText = `Exercice ${index + 1} / ${exercices.length}`;
 
+      // Reset de l'éditeur
       editor.setValue(ex.code, -1);
 
+      // Reset de l'interface de sortie
       outputDiv.innerText = "";
       statusDiv.style.display = "none";
       statusDiv.className = "status-msg";
 
-      // Navigation state
-      document.getElementById("btnPrev").disabled = (index === 0);
-      document.getElementById("btnNext").disabled = (index === exercices.length - 1);
-    }
+      // Mise à jour de l'UI (boutons, progression, connexion)
+      updateUI();
+    };
 
-    async function runCode() {
+    window.runCode = async () => {
       const ex = exercices[currentIdx];
       const userCode = editor.getValue();
 
+      // Reset UI avant exécution
       outputDiv.innerText = "";
       statusDiv.style.display = "none";
       runBtn.disabled = true;
-      runBtn.innerHTML = '<span class="loader"></span> ...';
+      runBtn.innerHTML = '<span class="loader"></span> Exécution...';
 
-      // Capture stdout
+      // Capture de la sortie standard Python (print)
       pyodide.setStdout({ batched: (msg) => outputDiv.innerText += msg + "\n" });
 
       try {
-        // 1. Exécution du code utilisateur
+        // A. Exécution du code Python
+        await pyodide.loadPackagesFromImports(userCode);
         await pyodide.runPythonAsync(userCode);
 
-        // 2. Validation
-        let success = false;
-        let message = "";
+        // B. Validation (On récupère un objet {success, message})
+        // On passe le contenu de outputDiv pour l'analyser
+        const result = await validateExercise(ex, outputDiv.innerText);
 
-        if (ex.validation.type === "manual") {
-          statusDiv.className = "status-msg success"; // Ou neutre
-          statusDiv.style.background = "#fff3cd";
-          statusDiv.style.color = "#856404";
-          statusDiv.style.borderColor = "#ffeeba";
-          statusDiv.innerHTML = `⚠️ <strong>Validation manuelle :</strong><br>${ex.validation.hint}`;
-          statusDiv.style.display = "block";
-          resetBtnState();
-          return;
-        }
-
-        if (ex.validation.type === "output_list") {
-          // Vérifie une liste exacte de lignes
-          const userLines = outputDiv.innerText.trim().split('\n').map(s => s.trim()).filter(s => s !== "");
-          const expected = ex.validation.values;
-
-          // Comparaison simple
-          success = (userLines.length === expected.length) &&
-            userLines.every((val, index) => val == expected[index]);
-
-          if (!success) message = `Sortie attendue : ${expected.slice(0, 5).join(", ")}... <br> Obtenue : ${userLines.slice(0, 5).join(", ")}...`;
-        }
-        else if (ex.validation.type === "output_includes") {
-          // Vérifie si la sortie CONTIENT les lignes attendues
-          const content = outputDiv.innerText;
-          success = ex.validation.values.every(val => content.includes(val));
-          if (!success) message = "Votre affichage ne contient pas toutes les valeurs attendues.";
-        }
-        else if (ex.validation.type === "function") {
-          // Exécute les assertions
-          try {
-            for (let test of ex.validation.tests) {
-              await pyodide.runPythonAsync(test);
-            }
-            success = true;
-          } catch (e) {
-            success = false;
-            message = "La fonction ne retourne pas le bon résultat pour tous les cas de test.";
-          }
-        }
-
-        // Affichage Résultat
+        // C. Affichage du résultat
         statusDiv.style.display = "block";
-        if (success) {
+
+        if (result.success) {
           statusDiv.className = "status-msg success";
           statusDiv.innerHTML = "✅ Bravo ! Exercice validé.";
+
+          // --- SAUVEGARDE EN BASE DE DONNÉES ---
+          // On vérifie si la fonction saveSuccess existe (si Supabase est chargé)
+          if (typeof saveSuccess === "function") {
+            await saveSuccess(currentIdx);
+          }
+
+          // Mise à jour visuelle immédiate (badge vert sur le titre)
+          updateUI();
+
         } else {
           statusDiv.className = "status-msg error";
-          statusDiv.innerHTML = `❌ Incorrect.<br><small>${message}</small>`;
+          statusDiv.innerHTML = `❌ Résultat incorrect.<br><small>${result.message}</small>`;
         }
 
       } catch (err) {
-        outputDiv.innerText += "\n🛑 Erreur Python :\n" + err;
+        // D. Gestion des erreurs Python (Syntaxe, Runtime)
         statusDiv.style.display = "block";
         statusDiv.className = "status-msg error";
-        statusDiv.innerHTML = "Votre code contient une erreur de syntaxe ou d'exécution.";
+        let cleanMsg = err.toString().replace('PythonError: Traceback (most recent call last):', '');
+        outputDiv.innerText += "\n🛑 Erreur Python :\n" + cleanMsg;
+        statusDiv.innerHTML = "Votre code contient une erreur.";
+      } finally {
+        // E. Réactivation du bouton (Quoi qu'il arrive)
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<span id="btnIcon">▶</span> Exécuter';
       }
+    };
 
-      resetBtnState();
-    }
-
-    function resetBtnState() {
-      runBtn.disabled = false;
-      runBtn.innerHTML = '<span id="btnIcon">▶</span> Exécuter';
-    }
-
-    function resetCode() {
+    window.resetCode = () => {
       if (confirm("Voulez-vous vraiment remettre le code à zéro ?")) {
         editor.setValue(exercices[currentIdx].code, -1);
         outputDiv.innerText = "";
         statusDiv.style.display = "none";
       }
+    };
+
+    window.nextExercise = () => { if (currentIdx < exercices.length - 1) loadExercise(currentIdx + 1); };
+    window.prevExercise = () => { if (currentIdx > 0) loadExercise(currentIdx - 1); };
+
+
+    // --- 2. FONCTIONS INTERNES (Logique métier) ---
+
+    function updateUI() {
+      const total = exercices.length;
+
+      // Gestion du texte de progression
+      let badge = document.getElementById("progressText");
+
+      // On suppose que userProgress est un tableau d'index (ex: [0, 2]) chargé depuis Supabase
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        const done = userProgress.length;
+        badge.innerText = `Progression : ${done} / ${total}`;
+
+        // Ajout du check vert si l'exercice courant est déjà validé
+        if (userProgress.includes(currentIdx)) {
+          document.getElementById("exTitle").innerHTML = `${currentIdx + 1}. ${exercices[currentIdx].titre} <span style='color:green'>✅</span>`;
+        }
+      } else {
+        badge.innerText = "Non connecté (Progression non sauvegardée)";
+      }
+
+      // État des boutons Précédent/Suivant
+      document.getElementById("btnPrev").disabled = (currentIdx === 0);
+      document.getElementById("btnNext").disabled = (currentIdx === total - 1);
     }
 
-    function nextExercise() { if (currentIdx < exercices.length - 1) loadExercise(currentIdx + 1); }
-    function prevExercise() { if (currentIdx > 0) loadExercise(currentIdx - 1); }
+    /**
+     * Logique de validation améliorée
+     * Retourne { success: bool, message: string }
+     */
+    async function validateExercise(ex, outputText) {
+      let success = false;
+      let message = "";
 
+      if (ex.validation.type === "manual") {
+        return { success: false, message: `Vérification manuelle requise : ${ex.validation.hint}` };
+      }
+
+      if (ex.validation.type === "output_list") {
+        const userLines = outputText.trim().split('\n').map(s => s.trim()).filter(s => s !== "");
+        const expected = ex.validation.values.map(s => String(s).trim());
+
+        success = (userLines.length === expected.length) && userLines.every((val, i) => val == expected[i]);
+        if (!success) message = `Sortie attendue : ${expected.join(", ")}`;
+      }
+
+      else if (ex.validation.type === "output_includes") {
+        const missing = ex.validation.values.filter(val => !outputText.includes(val));
+        success = (missing.length === 0);
+        if (!success) message = `Il manque : ${missing.join(", ")}`;
+      }
+
+      else if (ex.validation.type === "function") {
+        try {
+          for (let test of ex.validation.tests) {
+            await pyodide.runPythonAsync(test);
+          }
+          success = true;
+        } catch (e) {
+          success = false;
+          message = "La fonction ne passe pas les tests.";
+        }
+      }
+
+      return { success, message };
+    }
   </script>
 </body>
 
